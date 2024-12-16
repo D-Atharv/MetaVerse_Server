@@ -1,0 +1,43 @@
+# Go binary and compiled object files
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build artifacts
+*.test
+*.out
+
+# Dependency directories
+/vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# .env file for sensitive environment variables
+.env
+
+# Log files
+*.log
+
+# IDE/Editor-specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Cache files
+.cache/
+
+# GORM migrations (optional if using version control for migrations)
+migrations/
+
+# Go module cache
+/go/pkg/
