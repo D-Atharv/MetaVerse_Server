@@ -9,39 +9,27 @@ import (
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow connections from any origin
+		return true
 	},
 }
 
 func HandleConnections(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
-
 	if err != nil {
-		log.Println("Failed to upgrade connection:", err)
-		http.Error(w, "Failed to upgrade connection", http.StatusInternalServerError)
-		return 
+		log.Println("WebSocket upgrade failed:", err)
+		return
 	}
+	defer RemoveClient(conn)
 
-	defer conn.Close()
-
-	log.Println("New connection established")
+	log.Println("New WebSocket connection established")
 
 	for {
-		messageType, msg, err := conn.ReadMessage()
-
-		if err != nil {
-			log.Println(err, "failed to read message")
+		var msg Message
+		if err := conn.ReadJSON(&msg); err != nil {
+			log.Println("Error reading message:", err)
 			break
 		}
 
-		log.Printf("Received message: %s", msg)
-
-		err = conn.WriteMessage(messageType, msg)
-
-		if err != nil {
-			log.Println(err, "failed to write message")
-			break
-		}
+		HandleMessage(conn, msg)
 	}
-
 }
