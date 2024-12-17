@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	database "server/internal/db"
+	"server/internal/routes"
 	"server/internal/webSocket"
 )
 
@@ -19,6 +20,8 @@ func main() {
 	})
 
 	http.HandleFunc("/ws", webSocket.HandleConnections)
+
+	router := routes.SetupRoutes()
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -34,4 +37,7 @@ func main() {
 	if err := http.Serve(listener, nil); err != nil {
 		log.Fatal("Server error:", err)
 	}
+
+	log.Fatal(http.ListenAndServe(port, router))
+
 }
