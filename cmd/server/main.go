@@ -5,25 +5,33 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	database "server/internal/db"
 	"server/internal/webSocket"
 )
 
 func main() {
+
+	database.ConnectDB()
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "Hello world using golang")
 	})
 
 	http.HandleFunc("/ws", webSocket.HandleConnections)
 
-	listener, err := net.Listen("tcp", ":8080")
-	if err != nil {
-		log.Fatal(err)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
-	fmt.Println("Server running at port 8080")
-	err = http.Serve(listener, nil)
-
+	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Failed to start server:", err)
+	}
+
+	fmt.Printf("Server running on port %s\n", port)
+	if err := http.Serve(listener, nil); err != nil {
+		log.Fatal("Server error:", err)
 	}
 }
