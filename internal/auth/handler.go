@@ -3,29 +3,34 @@ package auth
 import (
 	"encoding/json"
 	"net/http"
+	"server/internal/models"
 	"server/internal/utils"
 )
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
+	var req models.User
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
 	}
-	json.NewDecoder(r.Body).Decode(&req)
 
 	if err := CreateUser(req.Username, req.Password); err != nil {
 		http.Error(w, "Registration failed", http.StatusInternalServerError)
 		return
 	}
-	w.Write([]byte("User registered successfully"))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+
+	response := map[string]string{"message": "User registered successfully"}
+	json.NewEncoder(w).Encode(response)
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
+	var req models.User
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
 	}
-	json.NewDecoder(r.Body).Decode(&req)
 
 	if !AuthenticateUser(req.Username, req.Password) {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
@@ -43,5 +48,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		Value: token,
 		Path:  "/",
 	})
-	w.Write([]byte("Login successful"))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+
+	response := map[string]string{"message": "User registered successfully"}
+	json.NewEncoder(w).Encode(response)
 }

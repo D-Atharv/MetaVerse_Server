@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"log"
 	"os"
-
+	
+	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"github.com/joho/godotenv"
 )
 
 var DB *gorm.DB
