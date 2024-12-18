@@ -3,11 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
-	database "server/internal/db"
-	// "server/internal/models"
+	"server/internal/db"
 	"server/internal/routes"
 	"server/internal/webSocket"
 
@@ -15,49 +13,40 @@ import (
 )
 
 func main() {
-
 	database.ConnectDB()
 
-	// err := database.DB.AutoMigrate(&models.User{}) //uncomment for migration 
+	// Uncomment for database migration (when needed)
+	// err := db.DB.AutoMigrate(&models.User{})
 	// if err != nil {
-	// 	log.Fatalf("Failed to migrate database: %v", err)
+	// 	log.Fatalf("Database migration failed: %v", err)
 	// }
-
-	fmt.Println("Database migration completed!")
+	// fmt.Println("Database migration completed!")
 
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:5173"},
+		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:3000"}, 
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
 	})
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "Hello world using golang")
-	})
+	mux := http.NewServeMux()
 
-	http.HandleFunc("/ws", webSocket.HandleConnections)
+	mux.HandleFunc("/ws", webSocket.HandleConnections)
 
 	router := routes.SetupRoutes()
+	mux.Handle("/", router)
+
+	handler := c.Handler(mux)
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "8080" 
 	}
 
-	handler := c.Handler(router)
-
-	listener, err := net.Listen("tcp", ":"+port)
-	if err != nil {
-		log.Fatal("Failed to start server:", err)
-	}
-
+	serverAddress := fmt.Sprintf(":%s", port)
 	fmt.Printf("Server running on port %s\n", port)
-	if err := http.Serve(listener, handler); err != nil {
-		log.Fatal("Server error:", err)
+
+	if err := http.ListenAndServe(serverAddress, handler); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
 	}
-
-	log.Fatal(http.ListenAndServe(port, handler))
-
-
 }

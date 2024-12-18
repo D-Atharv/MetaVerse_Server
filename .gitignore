@@ -41,3 +41,6 @@ migrations/
 
 # Go module cache
 /go/pkg/
+
+
+/test

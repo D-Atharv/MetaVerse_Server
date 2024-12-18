@@ -20,7 +20,16 @@ func HandleMessage(conn *websocket.Conn, msg Message) {
 		handleRegister(conn, msg.Data)
 
 	case "movement":
-		handleMovement( msg.Data)
+		handleMovement(msg.Data)
+
+	//TODO -> test case remove later
+	case "ping":
+		if err := conn.WriteJSON(Message{Event: "pong"}); err != nil {
+			log.Println("Failed to send pong:", err)
+		}
+	//TODO -> test case remove later
+	case "message":
+		log.Println("Message received:", string(msg.Data))
 
 	default:
 		log.Println("Unknown event:", msg.Event)
