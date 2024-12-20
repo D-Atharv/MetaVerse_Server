@@ -35,7 +35,7 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
         log.Printf("Structured message received: Event=%s, Data=%s", msg.Event, string(msg.Data))
         HandleMessage(conn, msg)
 
-        response := map[string]string{"status": "success", "message": "Message received and processed successfully"}
+        response := map[string]string{"event": "success", "message": "Message received and processed successfully"}
         if err := conn.WriteJSON(response); err != nil {
             log.Printf("Error writing JSON response: %v\n", err)
             break

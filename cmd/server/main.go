@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"server/internal/db"
+	// "server/internal/models"
 	"server/internal/routes"
 	"server/internal/webSocket"
 
@@ -16,7 +17,7 @@ func main() {
 	database.ConnectDB()
 
 	// Uncomment for database migration (when needed)
-	// err := db.DB.AutoMigrate(&models.User{})
+	// err := database.DB.AutoMigrate(&models.User{})
 	// if err != nil {
 	// 	log.Fatalf("Database migration failed: %v", err)
 	// }

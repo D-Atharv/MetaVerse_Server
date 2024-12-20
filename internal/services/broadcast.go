@@ -22,7 +22,7 @@ func BroadcastPosition(positions map[string]models.Position, clients map[*websoc
 
 	for client := range clients {
 		err := client.WriteJSON(map[string]interface{}{
-			"messageType": "positions",
+			"event": "positions",
 			"positions":   positionList,
 		})
 
