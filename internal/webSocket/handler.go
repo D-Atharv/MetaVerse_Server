@@ -20,14 +20,8 @@ func HandleMessage(conn *websocket.Conn, msg Message) {
 		handleRegister(conn, msg.Data)
 
 	case "movement":
-		handleMovement(msg.Data)
+		handleMovement(msg.Data, conn) 
 
-	//TODO -> test case remove later
-	case "ping":
-		if err := conn.WriteJSON(Message{Event: "pong"}); err != nil {
-			log.Println("Failed to send pong:", err)
-		}
-	//TODO -> test case remove later
 	case "message":
 		log.Println("Message received:", string(msg.Data))
 
@@ -35,6 +29,7 @@ func HandleMessage(conn *websocket.Conn, msg Message) {
 		log.Println("Unknown event:", msg.Event)
 	}
 }
+
 
 func handleRegister(conn *websocket.Conn, data json.RawMessage) {
 	var registerData struct {
@@ -48,16 +43,34 @@ func handleRegister(conn *websocket.Conn, data json.RawMessage) {
 	RegisterClient(conn, registerData.UserID)
 }
 
-func handleMovement(data json.RawMessage) {
+func handleMovement(data json.RawMessage, conn *websocket.Conn) {
 	var pos models.Position
 	if err := json.Unmarshal(data, &pos); err != nil {
 		log.Println("Invalid position data:", err)
+		response := map[string]string{"status": "error", "message": "Invalid position data"}
+		conn.WriteJSON(response)
 		return
 	}
 
+	// Update the position in the server
 	Mutex.Lock()
 	Positions[pos.UserID] = pos
 	Mutex.Unlock()
 
+	response := map[string]interface{}{
+		"status":  "success",
+		"message": "Position received",
+		"data": map[string]interface{}{
+			"x": pos.X,
+			"y": pos.Y,
+		},
+	}
+	err := conn.WriteJSON(response)
+	if err != nil {
+		log.Println("Failed to respond to client:", err)
+	}
+
+	//broadcast updated positions to all clients
 	services.BroadcastPosition(Positions, Clients)
 }
+
