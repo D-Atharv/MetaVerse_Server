@@ -23,12 +23,22 @@ func RegisterClient(conn *websocket.Conn, userID string) {
 }
 
 func RemoveClient(conn *websocket.Conn) {
-	Mutex.Lock()
-	defer Mutex.Unlock()
+    Mutex.Lock()
+    defer Mutex.Unlock()
 
-	userID := Clients[conn]
-	delete(Clients, conn)
-	delete(Positions, userID)
-	conn.Close()
-	log.Printf("User %s disconnected", userID)
+    userID := Clients[conn]
+    delete(Clients, conn)
+    delete(Positions, userID)
+
+    for client := range Clients {
+        err := client.WriteJSON(map[string]interface{}{
+            "event":   "disconnect",
+            "user_id": userID,
+        })
+        if err != nil {
+            log.Printf("Failed to notify client about disconnection: %v", err)
+        }
+    }
+    conn.Close()
+    log.Printf("User %s disconnected", userID)
 }

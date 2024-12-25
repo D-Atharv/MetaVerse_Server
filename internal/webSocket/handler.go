@@ -31,52 +31,91 @@ func HandleMessage(conn *websocket.Conn, msg Message) {
 }
 
 func handleRegister(conn *websocket.Conn, data json.RawMessage) {
-    var registerData struct {
-        UserID string `json:"user_id"`
-    }
-    if err := json.Unmarshal(data, &registerData); err != nil {
-        log.Println("Invalid registration data:", err)
-        return
-    }
+	var registerData struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.Unmarshal(data, &registerData); err != nil {
+		log.Println("Invalid registration data:", err)
+		return
+	}
 
-    RegisterClient(conn, registerData.UserID)
+	RegisterClient(conn, registerData.UserID)
 
-    // Log for debugging
-    log.Printf("Registered user: %s", registerData.UserID)
+	Mutex.Lock()
+	if _, exists := Positions[registerData.UserID]; !exists {
+		Positions[registerData.UserID] = models.Position{
+			UserID: registerData.UserID,
+			X:      0,
+			Y:      0,
+		}
+	}
+	Mutex.Unlock()
 
-    // Initialize the user's position if not already set
-    Mutex.Lock()
-    if _, exists := Positions[registerData.UserID]; !exists {
-        Positions[registerData.UserID] = models.Position{
-            UserID: registerData.UserID,
-            X:      0,
-            Y:      0,
-        }
-    }
-    Mutex.Unlock()
-
-    log.Printf("Broadcasting positions after registration of user %s", registerData.UserID)
-    services.BroadcastPosition(Positions, Clients)
+	services.BroadcastPosition(Positions, Clients)
 }
 
 func handleMovement(data json.RawMessage, conn *websocket.Conn) {
-    var pos models.Position
-    if err := json.Unmarshal(data, &pos); err != nil {
-        log.Println("Invalid position data:", err)
-        response := map[string]string{"status": "error", "message": "Invalid position data"}
-        conn.WriteJSON(response)
-        return
-    }
+	var pos models.Position
+	if err := json.Unmarshal(data, &pos); err != nil {
+		log.Println("Invalid position data:", err)
+		response := map[string]string{"status": "error", "message": "Invalid position data"}
+		conn.WriteJSON(response)
+		return
+	}
 
-    Mutex.Lock()
-    Positions[pos.UserID] = pos
-    Mutex.Unlock()
+	Mutex.Lock()
+	defer Mutex.Unlock()
 
-    // TODO:Log for debugging
-    log.Printf("Updated position for user %s: X=%.2f, Y=%.2f", pos.UserID, pos.X, pos.Y)
+	prevPos, exists := Positions[pos.UserID]
+	if exists && prevPos.X == pos.X && prevPos.Y == pos.Y {
+		// Skip if the position hasn't changed
+		return
+	}
+	Positions[pos.UserID] = pos
 
-    // Broadcast updated positions to all clients
-    log.Println("Broadcasting updated positions to all clients")
-    services.BroadcastPosition(Positions, Clients)
+
+	//TODO -> kept alert for now. To shift to pop up and to initiate a video call
+	alerts := []string{}                  
+	reverseAlerts := map[string][]string{} // Notifications for other players affected by this movement
+
+	for userID, otherPos := range Positions {
+		if userID == pos.UserID {
+			continue
+		}
+
+		if services.CheckProximity(pos, otherPos) {
+			// Notify the moving player about other users nearby
+			alerts = append(alerts, userID)
+
+			// Queue a notification for the other user
+			if _, ok := reverseAlerts[userID]; !ok {
+				reverseAlerts[userID] = []string{}
+			}
+			reverseAlerts[userID] = append(reverseAlerts[userID], pos.UserID)
+		}
+	}
+
+	if len(alerts) > 0 {
+		conn.WriteJSON(map[string]interface{}{
+			"event":  "proximity_alert",
+			"alerts": alerts,
+		})
+	}
+
+	for affectedUserID, usersNear := range reverseAlerts {
+		for client, clientUserID := range Clients {
+			if clientUserID == affectedUserID {
+				err := client.WriteJSON(map[string]interface{}{
+					"event":  "proximity_alert",
+					"alerts": usersNear,
+				})
+				if err != nil {
+					log.Printf("Failed to send proximity alert to %s: %v", affectedUserID, err)
+				}
+				break
+			}
+		}
+	}
+
+	services.BroadcastPosition(Positions, Clients)
 }
-
