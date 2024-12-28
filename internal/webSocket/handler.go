@@ -25,6 +25,9 @@ func HandleMessage(conn *websocket.Conn, msg Message) {
 	case "message":
 		log.Println("Message received:", string(msg.Data))
 
+	case "offer", "answer", "ice-candidate":
+		handleSignaling(conn, msg)
+
 	default:
 		log.Println("Unknown event:", msg.Event)
 	}
@@ -73,9 +76,8 @@ func handleMovement(data json.RawMessage, conn *websocket.Conn) {
 	}
 	Positions[pos.UserID] = pos
 
-
 	//TODO -> kept alert for now. To shift to pop up and to initiate a video call
-	alerts := []string{}                  
+	alerts := []string{}
 	reverseAlerts := map[string][]string{} // Notifications for other players affected by this movement
 
 	for userID, otherPos := range Positions {
@@ -86,6 +88,21 @@ func handleMovement(data json.RawMessage, conn *websocket.Conn) {
 		if services.CheckProximity(pos, otherPos) {
 			// Notify the moving player about other users nearby
 			alerts = append(alerts, userID)
+
+			for client, clientUserID := range Clients {
+				if clientUserID == userID || clientUserID == pos.UserID {
+					err := client.WriteJSON(map[string]interface{}{
+						"event": "video_call_prompt",
+						"data": map[string]string{
+							"from": pos.UserID,
+							"to":   userID,
+						},
+					})
+					if err != nil {
+						log.Printf("Failed to send video call prompt to %s: %v", clientUserID, err)
+					}
+				}
+			}
 
 			// Queue a notification for the other user
 			if _, ok := reverseAlerts[userID]; !ok {
@@ -118,4 +135,34 @@ func handleMovement(data json.RawMessage, conn *websocket.Conn) {
 	}
 
 	services.BroadcastPosition(Positions, Clients)
+}
+
+func handleSignaling(conn *websocket.Conn, msg Message) {
+	var signalingData struct {
+		To   string          `json:"to"`
+		From string          `json:"from"`
+		Body json.RawMessage `json:"body"`
+	}
+	if err := json.Unmarshal(msg.Data, &signalingData); err != nil {
+		log.Printf("Invalid signaling data: %v\n", err)
+		return
+	}
+
+	signalingData.From = Clients[conn]
+	msg.Data, _ = json.Marshal(signalingData)
+
+	Mutex.Lock()
+	defer Mutex.Unlock()
+
+	for client, userID := range Clients {
+		if userID == signalingData.To {
+			err := client.WriteJSON(msg)
+			if err != nil {
+				log.Printf("Failed to forward signaling message to %s: %v\n", signalingData.To, err)
+			}
+			return
+		}
+	}
+
+	log.Printf("Target peer not found: %s\n", signalingData.To)
 }
