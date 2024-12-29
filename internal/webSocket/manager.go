@@ -2,35 +2,28 @@ package webSocket
 
 import (
 	"log"
-	"server/internal/models"
-	"sync"
+	"server/internal/shared"
 
 	"github.com/gorilla/websocket"
 )
 
-var (
-	Clients   = make(map[*websocket.Conn]string) // Connected clients
-	Positions = make(map[string]models.Position)
-	Mutex     = sync.Mutex{} // Thread-safety for shared resources
-)
-
 func RegisterClient(conn *websocket.Conn, userID string) {
-	Mutex.Lock()
-	defer Mutex.Unlock()
+	shared.Mutex.Lock()
+	defer shared.Mutex.Unlock()
 
-	Clients[conn] = userID
+	shared.Clients[conn] = userID
 	log.Printf("User %s registered", userID)
 }
 
 func RemoveClient(conn *websocket.Conn) {
-    Mutex.Lock()
-    defer Mutex.Unlock()
+    shared.Mutex.Lock()
+    defer shared.Mutex.Unlock()
 
-    userID := Clients[conn]
-    delete(Clients, conn)
-    delete(Positions, userID)
+    userID := shared.Clients[conn]
+    delete(shared.Clients, conn)
+    delete(shared.Positions, userID)
 
-    for client := range Clients {
+    for client := range shared.Clients {
         err := client.WriteJSON(map[string]interface{}{
             "event":   "disconnect",
             "user_id": userID,

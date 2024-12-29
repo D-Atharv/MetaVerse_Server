@@ -5,16 +5,13 @@ import (
 	"log"
 	"server/internal/models"
 	"server/internal/services"
+	"server/internal/shared"
+	"server/internal/webRTC"
 
 	"github.com/gorilla/websocket"
 )
 
-type Message struct {
-	Event string          `json:"event"`
-	Data  json.RawMessage `json:"data"`
-}
-
-func HandleMessage(conn *websocket.Conn, msg Message) {
+func HandleMessage(conn *websocket.Conn, msg shared.Message) {
 	switch msg.Event {
 	case "register":
 		handleRegister(conn, msg.Data)
@@ -26,7 +23,7 @@ func HandleMessage(conn *websocket.Conn, msg Message) {
 		log.Println("Message received:", string(msg.Data))
 
 	case "offer", "answer", "ice-candidate":
-		handleSignaling(conn, msg)
+		webRTC.HandleSignaling(conn, msg)
 
 	default:
 		log.Println("Unknown event:", msg.Event)
@@ -44,17 +41,17 @@ func handleRegister(conn *websocket.Conn, data json.RawMessage) {
 
 	RegisterClient(conn, registerData.UserID)
 
-	Mutex.Lock()
-	if _, exists := Positions[registerData.UserID]; !exists {
-		Positions[registerData.UserID] = models.Position{
+	shared.Mutex.Lock()
+	if _, exists := shared.Positions[registerData.UserID]; !exists {
+		shared.Positions[registerData.UserID] = models.Position{
 			UserID: registerData.UserID,
 			X:      0,
 			Y:      0,
 		}
 	}
-	Mutex.Unlock()
+	shared.Mutex.Unlock()
 
-	services.BroadcastPosition(Positions, Clients)
+	services.BroadcastPosition(shared.Positions, shared.Clients)
 }
 
 func handleMovement(data json.RawMessage, conn *websocket.Conn) {
@@ -66,21 +63,21 @@ func handleMovement(data json.RawMessage, conn *websocket.Conn) {
 		return
 	}
 
-	Mutex.Lock()
-	defer Mutex.Unlock()
+	shared.Mutex.Lock()
+	defer shared.Mutex.Unlock()
 
-	prevPos, exists := Positions[pos.UserID]
+	prevPos, exists := shared.Positions[pos.UserID]
 	if exists && prevPos.X == pos.X && prevPos.Y == pos.Y {
 		// Skip if the position hasn't changed
 		return
 	}
-	Positions[pos.UserID] = pos
+	shared.Positions[pos.UserID] = pos
 
 	//TODO -> kept alert for now. To shift to pop up and to initiate a video call
 	alerts := []string{}
 	reverseAlerts := map[string][]string{} // Notifications for other players affected by this movement
 
-	for userID, otherPos := range Positions {
+	for userID, otherPos := range shared.Positions {
 		if userID == pos.UserID {
 			continue
 		}
@@ -89,7 +86,7 @@ func handleMovement(data json.RawMessage, conn *websocket.Conn) {
 			// Notify the moving player about other users nearby
 			alerts = append(alerts, userID)
 
-			for client, clientUserID := range Clients {
+			for client, clientUserID := range shared.Clients {
 				if clientUserID == userID || clientUserID == pos.UserID {
 					err := client.WriteJSON(map[string]interface{}{
 						"event": "video_call_prompt",
@@ -120,7 +117,7 @@ func handleMovement(data json.RawMessage, conn *websocket.Conn) {
 	}
 
 	for affectedUserID, usersNear := range reverseAlerts {
-		for client, clientUserID := range Clients {
+		for client, clientUserID := range shared.Clients {
 			if clientUserID == affectedUserID {
 				err := client.WriteJSON(map[string]interface{}{
 					"event":  "proximity_alert",
@@ -134,35 +131,5 @@ func handleMovement(data json.RawMessage, conn *websocket.Conn) {
 		}
 	}
 
-	services.BroadcastPosition(Positions, Clients)
-}
-
-func handleSignaling(conn *websocket.Conn, msg Message) {
-	var signalingData struct {
-		To   string          `json:"to"`
-		From string          `json:"from"`
-		Body json.RawMessage `json:"body"`
-	}
-	if err := json.Unmarshal(msg.Data, &signalingData); err != nil {
-		log.Printf("Invalid signaling data: %v\n", err)
-		return
-	}
-
-	signalingData.From = Clients[conn]
-	msg.Data, _ = json.Marshal(signalingData)
-
-	Mutex.Lock()
-	defer Mutex.Unlock()
-
-	for client, userID := range Clients {
-		if userID == signalingData.To {
-			err := client.WriteJSON(msg)
-			if err != nil {
-				log.Printf("Failed to forward signaling message to %s: %v\n", signalingData.To, err)
-			}
-			return
-		}
-	}
-
-	log.Printf("Target peer not found: %s\n", signalingData.To)
+	services.BroadcastPosition(shared.Positions, shared.Clients)
 }

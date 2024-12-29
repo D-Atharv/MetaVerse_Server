@@ -3,6 +3,7 @@ package webSocket
 import (
 	"log"
 	"net/http"
+	"server/internal/shared"
 
 	"github.com/gorilla/websocket"
 )
@@ -23,7 +24,7 @@ func HandleConnections(w http.ResponseWriter, r *http.Request) {
     log.Println("New WebSocket connection established!")
 
     for {
-        var msg Message
+        var msg shared.Message
 
         err := conn.ReadJSON(&msg)
         if err != nil {
